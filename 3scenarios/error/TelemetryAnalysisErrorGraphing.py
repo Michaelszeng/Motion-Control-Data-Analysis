@@ -6,6 +6,7 @@ to an excel sheet, then creates error vs time plots for all 10 trials for all 3 
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+from bisect import bisect
 
 s1 = []
 s1_t = []
@@ -186,6 +187,8 @@ def extrapolate_coordinates(times, errors):
 
 
 
+
+
 #For PI(t)D(t) Scenarios 1, 2, and 3
 for n in range(3):
     writer = pd.ExcelWriter("ErrorVsTime_S" + str(n+1) + ".xlsx", engine='xlsxwriter')
@@ -257,8 +260,44 @@ for n in range(3):
 
         worksheet.insert_chart('D2', chart)
 
-        # plt.scatter(times, errors, alpha=0.5)
-        # plt.show()
+
+
+    #Creating Consistency Plot (Count vs Time-To-Reach-Destination)
+    smallest_time = 9999
+    largest_time = 0
+    for i in range(10):
+        time = all_extrapolated_times[i][len(all_extrapolated_times[i])-1]
+        if time < smallest_time:
+            smallest_time = int(time)
+        elif time > largest_time:
+            largest_time = int(time)
+    # time_range1 = largest_time - smallest_time
+    mid = int((largest_time+smallest_time)/2)
+    # time_low_bound = smallest_time - int(time_range1/14)
+    # time_high_bound = largest_time + int(time_range1/14)
+    time_low_bound = mid - 299
+    time_high_bound = mid + 300
+    time_range = time_high_bound - time_low_bound    #time_range is always kept at 600! This is constant for all trials to presever scale in the plots.
+
+    bin_dividers = [time_low_bound]
+    for i in range(8):
+        bin_dividers.append(bin_dividers[i] + time_range/8)
+    bin_dividers = [int(x) for x in bin_dividers]
+    #Getting the list of time intervals (all the x-coordinates for the plot)
+    time_intervals = []
+    for i in range(8):
+        time_intervals.append(str(bin_dividers[i]) + "-" + str(bin_dividers[i+1]-1))
+    # print(time_intervals)
+    # print(bin_dividers)
+    #Getting the list of count for each time interval (all the y-coordinate for the plot)
+    count = [0, 0, 0, 0, 0, 0, 0, 0]
+    for i in range(10):
+        bin_num = bisect(bin_dividers, all_extrapolated_times[i][len(all_extrapolated_times[i])-1])
+        count[bin_num-1] += 1
+    # print(count)
+
+
+
 
     #Creating average plot of all trials
     #Ensure all lists from all 10 trials are the same length
@@ -324,8 +363,54 @@ for n in range(3):
     chart.set_size({'width': 400, 'height': 240})
     worksheet.insert_chart('D2', chart)
 
+
+    #Inserting Sheet and Chart for Consistency Data
+    d = {'PI(t)D(t) Time Interval': time_intervals, 'PI(t)D(t) Count': count}
+    df = pd.DataFrame(data=d)
+    df.to_excel(writer, sheet_name="CountVsTime")
+    # Access the XlsxWriter workbook and worksheet objects from the dataframe.
+    workbook = writer.book
+    worksheet = writer.sheets["CountVsTime"]
+    # Create a chart object.
+    chart = workbook.add_chart({'type': 'column'})
+    # Configure the series of the chart from the dataframe data.
+    chart.add_series({
+        'categories':     '='+'CountVsTime'+'!$B$2:$B$9',
+        'values':         '='+'CountVsTime'+'!$C$2:$C$9',
+        'line':           {'color': '#000000', 'width': 1.5},
+        'fill':           {'color': '#bf0000'}
+    })
+    line_chart = workbook.add_chart({'type': 'line'})
+    line_chart.add_series({
+        'categories':     '='+'CountVsTime'+'!$B$2:$B$9',
+        'values':         '='+'CountVsTime'+'!$C$2:$C$9',
+        'line':           {'color': '#700000', 'width': 1.5},
+        'smooth':         True,
+        'marker':         {'type': 'diamond', 'fill': {'color': '#700000'}, 'border': {'color': '#700000'}}
+    })
+    chart.combine(line_chart)
+    chart.set_x_axis({'name': 'Time To Reach Target (ms)', 'name_font':{'name':'Arial','size':12, 'bold': True}, 'num_font':  {'name': 'Arial', 'size': 9, 'bold': True}, 'line': {'color': '#000000', 'width': 1.5}, 'major_tick_mark': 'inside', 'minor_tick_mark': 'inside'})
+    chart.set_y_axis({'name': 'Count', 'min': 0, 'max': 8, 'name_font':{'name':'Arial','size':12, 'bold': True}, 'num_font':  {'name': 'Arial', 'size': 12, 'bold': True}, 'line': {'color': '#000000', 'width': 1.5}, 'major_tick_mark': 'inside', 'minor_tick_mark': 'inside', 'major_gridlines': {'visible': False}})
+    chart.set_title({'name': 'Count vs Time\nScenario ' + str(n+1), 'name_font':{'name':'Arial','size':12, 'bold': True}})
+    chart.set_legend({'none': True})
+    chart.set_plotarea({
+        'layout': {
+            'x':      0.14,
+            'y':      0.2,
+            'width':  0.82,
+            'height': 0.5,
+        }
+    })
+    chart.set_size({'width': 400, 'height': 300})
+    worksheet.insert_chart('D2', chart)
+
+
+
     #Save the excel file
     writer.save()
+
+
+
 
 
 #For Traditional PID Scenarios 1, 2, and 3
@@ -368,7 +453,7 @@ for n in range(3):
             'categories':     '='+sheet_name+'!$B$2:$B$' + str(max_row),
             'values':         '='+sheet_name+'!$C$2:$C$' + str(max_row),
             # 'line':           {'color': '#bf0000', 'width': 1.5, 'dash_type': 'dash'},    #Dashed line
-            'line':           {'color': '#bf0000', 'width': 1.5},
+            'line':           {'width': 1.5},
         })
 
         # Configure the chart axes.
@@ -398,8 +483,48 @@ for n in range(3):
 
         worksheet.insert_chart('D2', chart)
 
-        # plt.scatter(times, errors, alpha=0.5)
-        # plt.show()
+
+
+
+
+    #Creating Consistency Plot (Count vs Time-To-Reach-Destination)
+    smallest_time = 9999
+    largest_time = 0
+    for i in range(10):
+        time = all_extrapolated_times[i][len(all_extrapolated_times[i])-1]
+        if time < smallest_time:
+            smallest_time = int(time)
+        elif time > largest_time:
+            largest_time = int(time)
+    # time_range1 = largest_time - smallest_time
+    mid = int((largest_time+smallest_time)/2)
+    # time_low_bound = smallest_time - int(time_range1/14)
+    # time_high_bound = largest_time + int(time_range1/14)
+    time_low_bound = mid - 299
+    time_high_bound = mid + 300
+    time_range = time_high_bound - time_low_bound    #time_range is always kept at 600! This is constant for all trials to presever scale in the plots.
+
+    bin_dividers = [time_low_bound]
+    for i in range(8):
+        bin_dividers.append(bin_dividers[i] + time_range/8)
+    bin_dividers = [int(x) for x in bin_dividers]
+    #Getting the list of time intervals (all the x-coordinates for the plot)
+    time_intervals = []
+    for i in range(8):
+        time_intervals.append(str(bin_dividers[i]) + "-" + str(bin_dividers[i+1]-1))
+    # print(time_intervals)
+    # print(bin_dividers)
+    #Getting the list of count for each time interval (all the y-coordinate for the plot)
+    count = [0, 0, 0, 0, 0, 0, 0, 0]
+    for i in range(10):
+        bin_num = bisect(bin_dividers, all_extrapolated_times[i][len(all_extrapolated_times[i])-1])
+        count[bin_num-1] += 1
+    # print(count)
+
+
+
+
+
 
     #Creating average plot of all trials
     #Ensure all lists from all 10 trials are the same length
@@ -438,7 +563,7 @@ for n in range(3):
     chart.add_series({
         'categories':     '='+'Average'+'!$B$2:$B$9999',
         'values':         '='+'Average'+'!$C$2:$C$9999',
-        'line':           {'color': '#bf0000', 'width': 1.5},
+        'line':           {'width': 1.5},
     })
     # Configure the chart axes.
     if n==0:
@@ -464,4 +589,47 @@ for n in range(3):
     })
     chart.set_size({'width': 400, 'height': 240})
     worksheet.insert_chart('D2', chart)
+
+
+
+    #Inserting Sheet and Chart for Consistency Data
+    d = {'PID Time Interval': time_intervals, 'PID Count': count}
+    df = pd.DataFrame(data=d)
+    df.to_excel(writer, sheet_name="CountVsTime")
+    # Access the XlsxWriter workbook and worksheet objects from the dataframe.
+    workbook = writer.book
+    worksheet = writer.sheets["CountVsTime"]
+    # Create a chart object.
+    chart = workbook.add_chart({'type': 'column'})
+    # Configure the series of the chart from the dataframe data.
+    chart.add_series({
+        'categories':     '='+'CountVsTime'+'!$B$2:$B$9',
+        'values':         '='+'CountVsTime'+'!$C$2:$C$9',
+        'line':           {'color': '#000000', 'width': 1.5},
+    })
+    line_chart = workbook.add_chart({'type': 'line'})
+    line_chart.add_series({
+        'categories':     '='+'CountVsTime'+'!$B$2:$B$9',
+        'values':         '='+'CountVsTime'+'!$C$2:$C$9',
+        'line':           {'color': '#00306b', 'width': 1.5},
+        'smooth':         True,
+        'marker':         {'type': 'diamond', 'fill': {'color': '#00306b'}, 'border': {'color': '#00306b'}}
+    })
+    chart.combine(line_chart)
+    chart.set_x_axis({'name': 'Time To Reach Target (ms)', 'name_font':{'name':'Arial','size':12, 'bold': True}, 'num_font':  {'name': 'Arial', 'size': 9, 'bold': True}, 'line': {'color': '#000000', 'width': 1.5}, 'major_tick_mark': 'inside', 'minor_tick_mark': 'inside'})
+    chart.set_y_axis({'name': 'Count', 'min': 0, 'max': 8, 'name_font':{'name':'Arial','size':12, 'bold': True}, 'num_font':  {'name': 'Arial', 'size': 12, 'bold': True}, 'line': {'color': '#000000', 'width': 1.5}, 'major_tick_mark': 'inside', 'minor_tick_mark': 'inside', 'major_gridlines': {'visible': False}})
+    chart.set_title({'name': 'Count vs Time\nScenario ' + str(n+1), 'name_font':{'name':'Arial','size':12, 'bold': True}})
+    chart.set_legend({'none': True})
+    chart.set_plotarea({
+        'layout': {
+            'x':      0.14,
+            'y':      0.2,
+            'width':  0.82,
+            'height': 0.5,
+        }
+    })
+    chart.set_size({'width': 400, 'height': 300})
+    worksheet.insert_chart('D2', chart)
+
+
     writer.save()

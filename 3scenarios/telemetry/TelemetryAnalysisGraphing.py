@@ -1,6 +1,70 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import math
+
+def interpolate_coordinates(times_raw, x_raw, y_raw):
+    """
+    This function takes the time and position telemetry then interpolates an error value
+    at an inverval of 1ms.
+
+    This is used to calculate RMSE error for each trial.
+    """
+    times_raw = [1000*i for i in times_raw]     #Convert from sec to ms
+    times_raw = [round(i) for i in times_raw]   #convert all times to integers
+
+    #Getting rid of data points that have the exact same millisecond time stamp (this causes a bug with the code below)
+    times = []
+    x = []
+    y = []
+    for i in range(len(times_raw)-1):
+        if i == 0:
+            times.append(times_raw[i])
+            x.append(x_raw[i])
+            y.append(y_raw[i])
+        else:
+            if times_raw[i] != times_raw[i+1]:
+                times.append(times_raw[i+1])
+                x.append(x_raw[i+1])
+                y.append(y_raw[i+1])
+    # print(len(times))
+    # print(len(x))
+    # print(len(y))
+    # print(times)
+
+
+    new_times = []
+    new_x = []
+    new_y = []
+    current_time_index = 0
+    for i in range(int(times[len(times)-1]) + 1):
+        new_times.append(i)
+        if i == times[current_time_index+1]:
+            new_x.append(round(x[current_time_index+1], 3))
+            new_y.append(round(y[current_time_index+1], 3))
+            current_time_index += 1
+        else:
+            prev_time = times[current_time_index]
+            next_time = times[current_time_index+1]
+            prev_x = x[current_time_index]
+            prev_y = y[current_time_index]
+            next_x = x[current_time_index+1]
+            next_y = y[current_time_index+1]
+
+            time_diff = next_time-prev_time
+            if time_diff == 0:
+                # new_x.append(prev_x)
+                # new_y.append(prev_y)
+                del new_times[-1]
+            else:
+                ratio = (i-prev_time) / time_diff
+
+                new_x_val = prev_x + (ratio * (next_x - prev_x))
+                new_y_val = prev_y + (ratio * (next_y - prev_y))
+                new_x.append(round(new_x_val, 3))
+                new_y.append(round(new_y_val, 3))
+    return new_times, new_x, new_y
+
 
 s1 = []
 s1_t = []
@@ -148,6 +212,7 @@ data_t.append(s3_t)
 for n in range(3):
     writer = pd.ExcelWriter("PositionTelemetry_S" + str(n+1) + ".xlsx", engine='xlsxwriter')
 
+    all_speeds = []
     for i in range(10):
         sheet_name = 'T' + str(i+1)
 
@@ -171,6 +236,13 @@ for n in range(3):
         # print()
         # print(y)
         # print()
+        total_distance = 0
+        for j in range(len(x)-1):
+            total_distance += math.hypot(x[j+1]-x[j], y[j+1]-y[j])
+        # print("total_distance: " + str(total_distance))
+        avg_speed = total_distance/(t[len(t)-1]/1000)
+        # print("avg_speed: " + str(avg_speed))
+        all_speeds.append(avg_speed)
 
 
 
@@ -321,15 +393,25 @@ for n in range(3):
 
         worksheet.insert_chart('F2', chart)
 
+    #Writing avg speed
+    net_avg_speed = [sum(all_speeds)/len(all_speeds)]
+    # print(net_avg_speed)
+    #Create Pandas DataFrame
+    d = {'Scenario Average Speed (in/s)': net_avg_speed}
+    df = pd.DataFrame(data=d)
+    df.to_excel(writer, sheet_name="Average Speed")
+
+
     writer.save()
 
 
 
 
-#For PI(t)D(t) Scenarios 1, 2, and 3
+#For Tradtional PID Scenarios 1, 2, and 3
 for n in range(3):
     writer = pd.ExcelWriter("PositionTelemetry_S" + str(n+1) + "_Traditional.xlsx", engine='xlsxwriter')
 
+    all_speeds = []
     for i in range(10):
         sheet_name = 'T' + str(i+1)
 
@@ -353,6 +435,14 @@ for n in range(3):
         # print()
         # print(y)
         # print()
+
+        total_distance = 0
+        for j in range(len(x)-1):
+            total_distance += math.hypot(x[j+1]-x[j], y[j+1]-y[j])
+        # print("total_distance: " + str(total_distance))
+        avg_speed = total_distance/(t[len(t)-1])
+        # print("avg_speed: " + str(avg_speed))
+        all_speeds.append(avg_speed)
 
 
 
@@ -405,6 +495,17 @@ for n in range(3):
 
 
 
+        """CALCULATE ERROR BETWEEN REAL AND MP"""
+        interpolated_t, interpolated_x, interpolated_y = interpolate_coordinates(t, x, y)
+        interpolated_t_mp, interpolated_x_mp, interpolated_y_mp = interpolate_coordinates(t_mp, x_mp, y_mp)
+        plt.scatter(interpolated_x, interpolated_y)
+        plt.scatter(interpolated_x_mp, interpolated_y_mp)
+        plt.show()
+
+
+
+
+
         """""PLOTTING IN EXCEL"""""
         #Ensuring all lists are the same length (this is required by Pandas DataFrame)
         l = len(x)
@@ -438,6 +539,7 @@ for n in range(3):
             'values':         '='+sheet_name+'!$C$2:$C$' + str(max_row),
             # 'line':           {'color': '#bf0000', 'width': 1.5, 'dash_type': 'dash'},    #Dashed line
             'line':           {'width': 1.5},
+            'marker':         {'type': 'diamond', 'fill': {'color': '#00306b'}, 'border': {'color': '#00306b'}}
         })
         chart.add_series({  #Desired Path
             'categories':     '='+sheet_name+'!$D$2:$D$' + str(max_row),
@@ -502,5 +604,14 @@ for n in range(3):
             })
 
         worksheet.insert_chart('F2', chart)
+
+    #Writing avg speed
+    net_avg_speed = [sum(all_speeds)/len(all_speeds)]
+    # print(net_avg_speed)
+    #Create Pandas DataFrame
+    d = {'Scenario Average Speed (in/s)': net_avg_speed}
+    df = pd.DataFrame(data=d)
+    df.to_excel(writer, sheet_name="Average Speed")
+
 
     writer.save()

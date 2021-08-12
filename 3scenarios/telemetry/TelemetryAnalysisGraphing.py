@@ -1,17 +1,84 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import time
 import math
+from scipy import spatial
 
-def interpolate_coordinates(times_raw, x_raw, y_raw):
+# def interpolate_coordinates(times_raw, x_raw, y_raw, ms = True):
+#     """
+#     This function takes the time and position telemetry then interpolates an error value
+#     at an inverval of 1ms.
+#
+#     This is used to calculate RMSE error for each trial.
+#     """
+#     if not ms:
+#         times_raw = [1000*i for i in times_raw]     #Convert from sec to ms
+#         times_raw = [round(i) for i in times_raw]   #convert all times to integers
+#
+#     #Getting rid of data points that have the exact same millisecond time stamp (this causes a bug with the code below)
+#     times = []
+#     x = []
+#     y = []
+#     for i in range(len(times_raw)-1):
+#         if i == 0:
+#             times.append(times_raw[i])
+#             x.append(x_raw[i])
+#             y.append(y_raw[i])
+#         else:
+#             if times_raw[i] != times_raw[i+1]:
+#                 times.append(times_raw[i+1])
+#                 x.append(x_raw[i+1])
+#                 y.append(y_raw[i+1])
+#     # print(len(times))
+#     # print(len(x))
+#     # print(len(y))
+#     # print(times)
+#
+#
+#     new_times = []
+#     new_x = []
+#     new_y = []
+#     current_time_index = 0
+#     time.sleep(3)
+#     for i in range(0, int(times[len(times)-1]) + 1, 1):
+#         new_times.append(i)
+#         # print("current_time_index: " + str(current_time_index))
+#         if (i - times[current_time_index+1]) <= 1 and current_time_index < len(times)-2:
+#             new_x.append(round(x[current_time_index+1], 3))
+#             new_y.append(round(y[current_time_index+1], 3))
+#             current_time_index += 1
+#         else:
+#             prev_time = times[current_time_index]
+#             next_time = times[current_time_index+1]
+#             prev_x = x[current_time_index]
+#             prev_y = y[current_time_index]
+#             next_x = x[current_time_index+1]
+#             next_y = y[current_time_index+1]
+#
+#             time_diff = next_time-prev_time
+#             if time_diff == 0:
+#                 # new_x.append(prev_x)
+#                 # new_y.append(prev_y)
+#                 del new_times[-1]
+#             else:
+#                 ratio = (i-prev_time) / time_diff
+#
+#                 new_x_val = prev_x + (ratio * (next_x - prev_x))
+#                 new_y_val = prev_y + (ratio * (next_y - prev_y))
+#                 new_x.append(round(new_x_val, 3))
+#                 new_y.append(round(new_y_val, 3))
+#     return new_times, new_x, new_y
+
+def interpolate_coordinates(times_raw, x_raw, y_raw, ms=True):
     """
     This function takes the time and position telemetry then interpolates an error value
     at an inverval of 1ms.
-
     This is used to calculate RMSE error for each trial.
     """
-    times_raw = [1000*i for i in times_raw]     #Convert from sec to ms
-    times_raw = [round(i) for i in times_raw]   #convert all times to integers
+    if not ms:
+        times_raw = [1000*i for i in times_raw]     #Convert from sec to ms
+        times_raw = [round(i) for i in times_raw]   #convert all times to integers
 
     #Getting rid of data points that have the exact same millisecond time stamp (this causes a bug with the code below)
     times = []
@@ -64,6 +131,7 @@ def interpolate_coordinates(times_raw, x_raw, y_raw):
                 new_x.append(round(new_x_val, 3))
                 new_y.append(round(new_y_val, 3))
     return new_times, new_x, new_y
+
 
 
 s1 = []
@@ -208,12 +276,28 @@ data_t.append(s1_t)
 data_t.append(s2_t)
 data_t.append(s3_t)
 
+#Setting up the columns for the MAE table
+mae = []
+mae_t = []
+# mae_errors_1 = []
+# mae_errors_2 = []
+# mae_errors_3 = []
+# mae_errors_4 = []
+# mae_errors_5 = []
+# mae_errors_6 = []
+# mae_errors_7 = []
+# mae_errors_8 = []
+# mae_errors_9 = []
+# mae_errors_10 = []
+# mae_errors_avg = []
+
 #For PI(t)D(t) Scenarios 1, 2, and 3
 for n in range(3):
     writer = pd.ExcelWriter("PositionTelemetry_S" + str(n+1) + ".xlsx", engine='xlsxwriter')
 
     all_speeds = []
     for i in range(10):
+        print("PI(t)D(t) Scenario %d Trial %d" % (n+1, i+1))
         sheet_name = 'T' + str(i+1)
 
 
@@ -292,6 +376,53 @@ for n in range(3):
         # print()
         # print(y_mp)
         # print()
+
+
+
+        """CALCULATE ERROR BETWEEN REAL AND MP"""
+        interpolated_t, interpolated_x, interpolated_y = interpolate_coordinates(t, x, y)
+        interpolated_t_mp, interpolated_x_mp, interpolated_y_mp = interpolate_coordinates(t_mp, x_mp, y_mp, ms=False)
+
+        # plt.scatter(interpolated_x, interpolated_y)
+        # plt.scatter(interpolated_x_mp, interpolated_y_mp)
+        # plt.show()
+
+        all_errors = []
+        for j in range(len(interpolated_t)):    #Looping through every point on the real path
+            real_path_pt = [interpolated_x[j], interpolated_y[j]]
+
+            path_mp = np.column_stack((interpolated_x_mp, interpolated_y_mp)) #Converting to np array for vectorization
+
+            distance, index = spatial.KDTree(path_mp).query(real_path_pt)
+            # print(distance)
+            # print(real_path_pt)
+            # print(path_mp[index])
+            # print()
+            all_errors.append(distance)
+
+            # min_dist = 999.9
+            # min_dist_mp_idx = 0
+            # for k in range(len(interpolated_t_mp)): #Looping through every point on the MP path to find the nearest point to the point on the real path.
+            #     dist = math.hypot(interpolated_x[j]-interpolated_x_mp[k], interpolated_y[j]-interpolated_y_mp[k])
+            #     if dist < min_dist:
+            #         min_dist = dist
+            #         min_dist_mp_idx = k
+            #     elif dist > min_dist + 1:   #If the distance starts increasing, means the nearest point has already been passed (adding 1 just for safety)
+            #         break
+            # all_errors.append(min_dist)
+
+        avg_error = round(sum(all_errors) / len(all_errors), 3)
+        print(avg_error)
+        mae.append(avg_error)
+        #On the last trial of the scenario, calculate the average MAE for the scenario
+        if i == 9:
+            scenario_total_mae = 0
+            for j in range(10):
+                scenario_total_mae += mae[len(mae)-1 - j]
+            scenario_avg_mae = round(scenario_total_mae/10, 3)
+            mae.append(scenario_avg_mae)
+
+
 
 
 
@@ -413,6 +544,7 @@ for n in range(3):
 
     all_speeds = []
     for i in range(10):
+        print("Traditional PID Scenario %d Trial %d" % (n+1, i+1))
         sheet_name = 'T' + str(i+1)
 
 
@@ -496,11 +628,60 @@ for n in range(3):
 
 
         """CALCULATE ERROR BETWEEN REAL AND MP"""
-        interpolated_t, interpolated_x, interpolated_y = interpolate_coordinates(t, x, y)
-        interpolated_t_mp, interpolated_x_mp, interpolated_y_mp = interpolate_coordinates(t_mp, x_mp, y_mp)
-        plt.scatter(interpolated_x, interpolated_y)
-        plt.scatter(interpolated_x_mp, interpolated_y_mp)
-        plt.show()
+        interpolated_t, interpolated_x, interpolated_y = interpolate_coordinates(t, x, y, ms=False)
+        interpolated_t_mp, interpolated_x_mp, interpolated_y_mp = interpolate_coordinates(t_mp, x_mp, y_mp, ms=False)
+
+        all_errors = []
+        for j in range(len(interpolated_t)):    #Looping through every point on the real path
+            real_path_pt = [interpolated_x[j], interpolated_y[j]]
+
+            path_mp = np.column_stack((interpolated_x_mp, interpolated_y_mp)) #Converting to np array for vectorization
+
+            distance, index = spatial.KDTree(path_mp).query(real_path_pt)
+            # print(distance)
+            # print(real_path_pt)
+            # print(path_mp[index])
+            # print()
+            all_errors.append(distance)
+
+            # min_dist = 999.9
+            # min_dist_mp_idx = 0
+            # for k in range(len(interpolated_t_mp)): #Looping through every point on the MP path to find the nearest point to the point on the real path.
+            #     dist = math.hypot(interpolated_x[j]-interpolated_x_mp[k], interpolated_y[j]-interpolated_y_mp[k])
+            #     if dist < min_dist:
+            #         min_dist = dist
+            #         min_dist_mp_idx = k
+            #     elif dist > min_dist + 1:   #If the distance starts increasing, means the nearest point has already been passed (adding 1 just for safety)
+            #         break
+            # all_errors.append(min_dist)
+
+        # all_errors = []
+        # for j in range(len(interpolated_t)):    #Looping through every point on the real path
+        #     min_dist = 999.9
+        #     min_dist_mp_idx = 0
+        #     for k in range(len(interpolated_t_mp)): #Looping through every point on the MP path to find the nearest point to the point on the real path.
+        #         dist = math.hypot(interpolated_x[j]-interpolated_x_mp[k], interpolated_y[j]-interpolated_y_mp[k])
+        #         if dist < min_dist:
+        #             min_dist = dist
+        #             min_dist_mp_idx = k
+        #         elif dist > min_dist + 1:   #If the distance starts increasing, means the nearest point has already been passed (adding 1 just for safety)
+        #             break
+        #     all_errors.append(min_dist)
+
+        avg_error = round(sum(all_errors) / len(all_errors), 3)
+        print(avg_error)
+        mae_t.append(avg_error)
+        #On the last trial of the scenario, calculate the average MAE for the scenario
+        if i == 9:
+            scenario_total_mae = 0
+            for j in range(10):
+                scenario_total_mae += mae_t[len(mae_t)-1 - j]
+            scenario_avg_mae = round(scenario_total_mae/10, 3)
+            mae_t.append(scenario_avg_mae)
+
+        # plt.scatter(interpolated_x, interpolated_y)
+        # plt.scatter(interpolated_x_mp, interpolated_y_mp)
+        # plt.show()
 
 
 
@@ -615,3 +796,29 @@ for n in range(3):
 
 
     writer.save()
+
+
+
+#Saving the MAE deviations to excel
+"""
+Labeling (must be done manually):
+ - Top row is merged into 1 that says "Mean Average Deviation From Target Path (in)"
+ - Left-most rows are merged in groups of 3. They are titled "PI(t)D(t)" and "Traditional PID"
+ - 2nd left-most rows are titled, from top to bottom: Trial, Scenario 1, Scenario 2, Scenario 3, Scenario 1, Scenario 2, Scenario 3
+"""
+writer = pd.ExcelWriter("DeviationsTable_Traditional.xlsx", engine='xlsxwriter')
+#Get average MAE of for all trials in each scenario
+d = {'1': [mae[0], mae[11], mae[22], mae_t[0], mae_t[11], mae_t[22]], \
+    '2': [mae[1], mae[12], mae[23], mae_t[1], mae_t[12], mae_t[23]], \
+    '3': [mae[2], mae[13], mae[24], mae_t[2], mae_t[13], mae_t[24]], \
+    '4': [mae[3], mae[14], mae[25], mae_t[3], mae_t[14], mae_t[25]], \
+    '5': [mae[4], mae[15], mae[26], mae_t[4], mae_t[15], mae_t[26]], \
+    '6': [mae[5], mae[16], mae[27], mae_t[5], mae_t[16], mae_t[27]], \
+    '7': [mae[6], mae[17], mae[28], mae_t[6], mae_t[17], mae_t[28]], \
+    '8': [mae[7], mae[18], mae[29], mae_t[7], mae_t[18], mae_t[29]], \
+    '9': [mae[8], mae[19], mae[30], mae_t[8], mae_t[19], mae_t[30]], \
+    '10': [mae[9], mae[20], mae[31], mae_t[9], mae_t[20], mae_t[31]], \
+    'Scenario Average': [mae[10], mae[21], mae[32], mae_t[10], mae_t[21], mae_t[32]]}
+df = pd.DataFrame(data=d)
+df.to_excel(writer, sheet_name="Deviations")
+writer.save()

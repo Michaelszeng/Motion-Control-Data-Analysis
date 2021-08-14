@@ -1,9 +1,14 @@
+"""
+COMPLETELY FINISHED. DO NOT EDIT OR RERUN.
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import time
 import math
 from scipy import spatial
+from bisect import bisect
 
 # def interpolate_coordinates(times_raw, x_raw, y_raw, ms = True):
 #     """
@@ -276,9 +281,10 @@ data_t.append(s1_t)
 data_t.append(s2_t)
 data_t.append(s3_t)
 
-#Setting up the columns for the MAE table
+#Setting lists to contain deviation from path data
 mae = []
 mae_t = []
+max_deviations = []
 # mae_errors_1 = []
 # mae_errors_2 = []
 # mae_errors_3 = []
@@ -421,6 +427,10 @@ for n in range(3):
                 scenario_total_mae += mae[len(mae)-1 - j]
             scenario_avg_mae = round(scenario_total_mae/10, 3)
             mae.append(scenario_avg_mae)
+
+        #Calculate and save the max singular error from the 10 trails
+        max_deviations.append(round(max(all_errors), 3))
+        print("max(all_errors): " + str(max(all_errors)))
 
 
 
@@ -655,19 +665,6 @@ for n in range(3):
             #         break
             # all_errors.append(min_dist)
 
-        # all_errors = []
-        # for j in range(len(interpolated_t)):    #Looping through every point on the real path
-        #     min_dist = 999.9
-        #     min_dist_mp_idx = 0
-        #     for k in range(len(interpolated_t_mp)): #Looping through every point on the MP path to find the nearest point to the point on the real path.
-        #         dist = math.hypot(interpolated_x[j]-interpolated_x_mp[k], interpolated_y[j]-interpolated_y_mp[k])
-        #         if dist < min_dist:
-        #             min_dist = dist
-        #             min_dist_mp_idx = k
-        #         elif dist > min_dist + 1:   #If the distance starts increasing, means the nearest point has already been passed (adding 1 just for safety)
-        #             break
-        #     all_errors.append(min_dist)
-
         avg_error = round(sum(all_errors) / len(all_errors), 3)
         print(avg_error)
         mae_t.append(avg_error)
@@ -678,6 +675,10 @@ for n in range(3):
                 scenario_total_mae += mae_t[len(mae_t)-1 - j]
             scenario_avg_mae = round(scenario_total_mae/10, 3)
             mae_t.append(scenario_avg_mae)
+
+        #Calculate and save the max singular error from the 10 trails
+        max_deviations.append(round(max(all_errors), 3))
+        print("max(all_errors): " + str(max(all_errors)))
 
         # plt.scatter(interpolated_x, interpolated_y)
         # plt.scatter(interpolated_x_mp, interpolated_y_mp)
@@ -720,7 +721,7 @@ for n in range(3):
             'values':         '='+sheet_name+'!$C$2:$C$' + str(max_row),
             # 'line':           {'color': '#bf0000', 'width': 1.5, 'dash_type': 'dash'},    #Dashed line
             'line':           {'width': 1.5},
-            'marker':         {'type': 'diamond', 'fill': {'color': '#00306b'}, 'border': {'color': '#00306b'}}
+            # 'marker':         {'type': 'diamond', 'fill': {'color': '#00306b'}, 'border': {'color': '#00306b'}}
         })
         chart.add_series({  #Desired Path
             'categories':     '='+sheet_name+'!$D$2:$D$' + str(max_row),
@@ -806,6 +807,12 @@ Labeling (must be done manually):
  - Left-most rows are merged in groups of 3. They are titled "PI(t)D(t)" and "Traditional PID"
  - 2nd left-most rows are titled, from top to bottom: Trial, Scenario 1, Scenario 2, Scenario 3, Scenario 1, Scenario 2, Scenario 3
 """
+s1_max = max(max_deviations[0:10])
+s2_max = max(max_deviations[10:20])
+s3_max = max(max_deviations[20:30])
+s1_max_t = max(max_deviations[30:40])
+s2_max_t = max(max_deviations[40:50])
+s3_max_t = max(max_deviations[50:60])
 writer = pd.ExcelWriter("DeviationsTable_Traditional.xlsx", engine='xlsxwriter')
 #Get average MAE of for all trials in each scenario
 d = {'1': [mae[0], mae[11], mae[22], mae_t[0], mae_t[11], mae_t[22]], \
@@ -818,7 +825,148 @@ d = {'1': [mae[0], mae[11], mae[22], mae_t[0], mae_t[11], mae_t[22]], \
     '8': [mae[7], mae[18], mae[29], mae_t[7], mae_t[18], mae_t[29]], \
     '9': [mae[8], mae[19], mae[30], mae_t[8], mae_t[19], mae_t[30]], \
     '10': [mae[9], mae[20], mae[31], mae_t[9], mae_t[20], mae_t[31]], \
-    'Scenario Average': [mae[10], mae[21], mae[32], mae_t[10], mae_t[21], mae_t[32]]}
+    'Scenario Average': [mae[10], mae[21], mae[32], mae_t[10], mae_t[21], mae_t[32]], \
+    'Scenario Max': [s1_max, s2_max, s3_max, s1_max_t, s2_max_t, s3_max_t]}
 df = pd.DataFrame(data=d)
 df.to_excel(writer, sheet_name="Deviations")
+
+
+
+#Plotting Count vs Deviation
+num_bins = 16
+#Setting up bins
+smallest_dev = 99
+largest_dev = 0
+for i in range(60):
+    if i >= 30: #Use the deviations from traditional PID instead
+        dev = mae_t[i-30]
+    else:
+        dev = mae[i]
+    if dev < smallest_dev:
+        smallest_dev = round(dev, 3)
+    elif dev > largest_dev:
+        largest_dev = round(dev, 3)
+mid = round((largest_dev+smallest_dev)/2, 3)
+dev_low_bound = mid - 1.25
+dev_high_bound = mid + 1.25
+dev_range = dev_high_bound - dev_low_bound    #dev_range is always kept at 2.5! This is constant for all trials to presever scale in the plots.
+
+bin_dividers = [dev_low_bound]
+for i in range(num_bins):
+    bin_dividers.append(bin_dividers[i] + dev_range/num_bins)
+bin_dividers = [round(x, 2) for x in bin_dividers]
+#Getting the list of dev intervals (all the x-coordinates for the plot)
+dev_intervals = []
+for i in range(num_bins):
+    dev_intervals.append(str(bin_dividers[i]) + "-" + str(bin_dividers[i+1]))
+print(dev_intervals)
+print(bin_dividers)
+print()
+
+
+
+#Calculating Count data for PI(t)D(t)
+#Getting the list of count for each dev interval (all the y-coordinate for the plot)
+count = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+for i in range(30):
+    bin_num = bisect(bin_dividers, mae[i])
+    count[bin_num-1] += 1
+print(count)
+
+d = {"deviation intervals": dev_intervals, "count": count}
+
+df = pd.DataFrame(data=d)
+df.to_excel(writer, sheet_name="CountVsDeviation")
+
+# Access the XlsxWriter workbook and worksheet objects from the dataframe.
+workbook = writer.book
+worksheet = writer.sheets["CountVsDeviation"]
+# Create a chart object.
+chart = workbook.add_chart({'type': 'column'})
+
+# Configure the series of the chart from the dataframe data.
+chart.add_series({
+    'categories':     '='+'CountVsDeviation'+'!$B$2:$B$17',
+    'values':         '='+'CountVsDeviation'+'!$C$2:$C$17',
+    'line':           {'color': '#000000', 'width': 1.5},
+    'fill':           {'color': '#bf0000'}
+})
+line_chart = workbook.add_chart({'type': 'line'})
+line_chart.add_series({
+    'categories':     '='+'CountVsDeviation'+'!$B$2:$B$17',
+    'values':         '='+'CountVsDeviation'+'!$C$2:$C$17',
+    'line':           {'color': '#700000', 'width': 1.5},
+    'smooth':         True,
+    'marker':         {'type': 'diamond', 'fill': {'color': '#700000'}, 'border': {'color': '#700000'}}
+})
+chart.combine(line_chart)
+chart.set_x_axis({'name': 'Trial Mean Deviation from Target Path (in)', 'name_font':{'name':'Arial','size':12, 'bold': True}, 'num_font':  {'name': 'Arial', 'size': 9, 'bold': True}, 'line': {'color': '#000000', 'width': 1.5}, 'major_tick_mark': 'inside'})
+chart.set_y_axis({'name': 'Count', 'min': 0, 'max': 16, 'name_font':{'name':'Arial','size':12, 'bold': True}, 'num_font':  {'name': 'Arial', 'size': 12, 'bold': True}, 'line': {'color': '#000000', 'width': 1.5}, 'major_tick_mark': 'inside', 'minor_tick_mark': 'inside', 'major_gridlines': {'visible': False}})
+chart.set_title({'name': 'Count vs Mean Deviation\nPI(t)D(t) All Scenarios', 'name_font':{'name':'Arial','size':12, 'bold': True}})
+chart.set_legend({'none': True})
+chart.set_plotarea({
+    'layout': {
+        'x':      0.09,
+        'y':      0.2,
+        'width':  0.87,
+        'height': 0.5,
+    }
+})
+chart.set_size({'width': 800, 'height': 300})
+worksheet.insert_chart('D2', chart)
+
+print("---------------------------------------------------------")
+
+#Calculating Count data for Traditional PID
+#Getting the list of count for each dev interval (all the y-coordinate for the plot)
+count = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+for i in range(30):
+    bin_num = bisect(bin_dividers, mae_t[i])
+    count[bin_num-1] += 1
+print(count)
+
+d = {"deviation intervals": dev_intervals, "count": count}
+
+df = pd.DataFrame(data=d)
+df.to_excel(writer, sheet_name="CountVsDeviation_t")
+
+# Access the XlsxWriter workbook and worksheet objects from the dataframe.
+workbook = writer.book
+worksheet = writer.sheets["CountVsDeviation_t"]
+# Create a chart object.
+chart = workbook.add_chart({'type': 'column'})
+
+# Configure the series of the chart from the dataframe data.
+chart.add_series({
+    'categories':     '='+'CountVsDeviation_t'+'!$B$2:$B$17',
+    'values':         '='+'CountVsDeviation_t'+'!$C$2:$C$17',
+    'line':           {'color': '#000000', 'width': 1.5},
+    # 'fill':           {'color': '#bf0000'}
+})
+line_chart = workbook.add_chart({'type': 'line'})
+line_chart.add_series({
+    'categories':     '='+'CountVsDeviation_t'+'!$B$2:$B$17',
+    'values':         '='+'CountVsDeviation_t'+'!$C$2:$C$17',
+    'line':           {'color': '#00306b', 'width': 1.5},
+    'smooth':         True,
+    'marker':         {'type': 'diamond', 'fill': {'color': '#00306b'}, 'border': {'color': '#00306b'}}
+})
+chart.combine(line_chart)
+chart.set_x_axis({'name': 'Trial Mean Deviation from Target Path (in)', 'name_font':{'name':'Arial','size':12, 'bold': True}, 'num_font':  {'name': 'Arial', 'size': 9, 'bold': True}, 'line': {'color': '#000000', 'width': 1.5}, 'major_tick_mark': 'inside'})
+chart.set_y_axis({'name': 'Count', 'min': 0, 'max': 16, 'name_font':{'name':'Arial','size':12, 'bold': True}, 'num_font':  {'name': 'Arial', 'size': 12, 'bold': True}, 'line': {'color': '#000000', 'width': 1.5}, 'major_tick_mark': 'inside', 'minor_tick_mark': 'inside', 'major_gridlines': {'visible': False}})
+chart.set_title({'name': 'Count vs Mean Deviation\nPID All Scenarios', 'name_font':{'name':'Arial','size':12, 'bold': True}})
+chart.set_legend({'none': True})
+chart.set_plotarea({
+    'layout': {
+        'x':      0.09,
+        'y':      0.2,
+        'width':  0.87,
+        'height': 0.5,
+    }
+})
+chart.set_size({'width': 800, 'height': 300})
+worksheet.insert_chart('D2', chart)
+
+
+
 writer.save()

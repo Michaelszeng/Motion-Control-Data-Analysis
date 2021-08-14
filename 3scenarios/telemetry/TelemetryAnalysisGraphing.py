@@ -815,16 +815,16 @@ s2_max_t = max(max_deviations[40:50])
 s3_max_t = max(max_deviations[50:60])
 writer = pd.ExcelWriter("DeviationsTable_Traditional.xlsx", engine='xlsxwriter')
 #Get average MAE of for all trials in each scenario
-d = {'1': [mae[0], mae[11], mae[22], mae_t[0], mae_t[11], mae_t[22]], \
-    '2': [mae[1], mae[12], mae[23], mae_t[1], mae_t[12], mae_t[23]], \
-    '3': [mae[2], mae[13], mae[24], mae_t[2], mae_t[13], mae_t[24]], \
-    '4': [mae[3], mae[14], mae[25], mae_t[3], mae_t[14], mae_t[25]], \
-    '5': [mae[4], mae[15], mae[26], mae_t[4], mae_t[15], mae_t[26]], \
-    '6': [mae[5], mae[16], mae[27], mae_t[5], mae_t[16], mae_t[27]], \
-    '7': [mae[6], mae[17], mae[28], mae_t[6], mae_t[17], mae_t[28]], \
-    '8': [mae[7], mae[18], mae[29], mae_t[7], mae_t[18], mae_t[29]], \
-    '9': [mae[8], mae[19], mae[30], mae_t[8], mae_t[19], mae_t[30]], \
-    '10': [mae[9], mae[20], mae[31], mae_t[9], mae_t[20], mae_t[31]], \
+d = {'Trial 1': [mae[0], mae[11], mae[22], mae_t[0], mae_t[11], mae_t[22]], \
+    'Trial 2': [mae[1], mae[12], mae[23], mae_t[1], mae_t[12], mae_t[23]], \
+    'Trial 3': [mae[2], mae[13], mae[24], mae_t[2], mae_t[13], mae_t[24]], \
+    'Trial 4': [mae[3], mae[14], mae[25], mae_t[3], mae_t[14], mae_t[25]], \
+    'Trial 5': [mae[4], mae[15], mae[26], mae_t[4], mae_t[15], mae_t[26]], \
+    'Trial 6': [mae[5], mae[16], mae[27], mae_t[5], mae_t[16], mae_t[27]], \
+    'Trial 7': [mae[6], mae[17], mae[28], mae_t[6], mae_t[17], mae_t[28]], \
+    'Trial 8': [mae[7], mae[18], mae[29], mae_t[7], mae_t[18], mae_t[29]], \
+    'Trial 9': [mae[8], mae[19], mae[30], mae_t[8], mae_t[19], mae_t[30]], \
+    'Trial 10': [mae[9], mae[20], mae[31], mae_t[9], mae_t[20], mae_t[31]], \
     'Scenario Average': [mae[10], mae[21], mae[32], mae_t[10], mae_t[21], mae_t[32]], \
     'Scenario Max': [s1_max, s2_max, s3_max, s1_max_t, s2_max_t, s3_max_t]}
 df = pd.DataFrame(data=d)
